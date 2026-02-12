@@ -86,7 +86,21 @@
   const keys = new Set();
   window.addEventListener("keydown", (e) => {
     if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+
+    // Press SPACE to start from splash
+    if(showSplash && e.key === " "){
+      showSplash = false;
+      state.level = 1;
+      state.lives = 3;
+      state.score = 0;
+      resetShip();
+      nextStage();
+      beep(784,0.06,"square",0.05);
+      return;
+    }
+
     keys.add(e.key);
+
     if(e.key === "p" || e.key === "P") togglePause();
     if(e.key === "m" || e.key === "M") { muted = !muted; beep(muted?160:660, 0.08, "square", 0.05); }
     if(e.key === "Shift") tryHyperspace();
@@ -103,7 +117,7 @@
     lives:3,
     shake:0,
     time:0,
-    mode:"wave", // wave | boss
+    mode:"splash", // splash | wave | boss
     bannerT:0
   };
 
@@ -113,6 +127,7 @@
   };
 
   let bullets=[], rocks=[], enemies=[], powerups=[], particles=[], boss=null;
+  let showSplash = true;
 
   // ===== Stars (no blur, crisp points)
   const stars = (() => {
@@ -267,7 +282,6 @@
   }
 
   function nextStage(){
-    resetShip();
     if(isBossLevel(state.level)) startBossRound(state.level);
     else startWave(state.level);
     beep(523,0.06,"square",0.04); beep(784,0.06,"square",0.04);
@@ -277,7 +291,7 @@
   function togglePause(){ state.paused = !state.paused; beep(state.paused?200:600,0.06,"square",0.035); }
 
   function tryHyperspace(){
-    if(state.paused) return;
+    if(showSplash || state.paused) return;
     beep(1100,0.05,"square",0.03);
     if(Math.random()<0.12){ hitShip(); return; }
     let x,y;
@@ -303,16 +317,18 @@
     if(state.lives<=0){
       state.hi = Math.max(state.hi, state.score);
       localStorage.setItem("blastroids_hi", String(state.hi));
-      // instant restart
+      // back to splash on game over
       state.score=0; state.level=1; state.lives=3;
+      bullets=[]; rocks=[]; enemies=[]; powerups=[]; particles=[]; boss=null;
       resetShip();
-      nextStage();
+      state.mode="splash";
+      showSplash=true;
     } else {
       resetShip();
     }
   }
 
-  // ===== Vector style draw (no blur, no filters, no scaled FX)
+  // ===== Vector draw helper (crisp, no blur)
   function vstroke(color, width, pathFn){
     ctx.save();
     ctx.strokeStyle = color;
@@ -328,13 +344,28 @@
   // ===== Main update
   function update(dt){
     state.time += dt;
-    state.bannerT = Math.max(0, state.bannerT - dt);
 
     // stars
     for(const s of stars){
       s.y += (10 + s.z*34)*dt;
       if(s.y > H+4){ s.y=-4; s.x=Math.random()*W; }
     }
+
+    // particles
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt;
+      p.vx *= Math.pow(0.88, dt*60);
+      p.vy *= Math.pow(0.88, dt*60);
+      if(p.t>=p.life) particles.splice(i,1);
+    }
+
+    if(showSplash){
+      // nothing else updates; just animate stars/particles
+      return;
+    }
+
+    state.bannerT = Math.max(0, state.bannerT - dt);
 
     // ship
     ship.invuln = Math.max(0, ship.invuln - dt);
@@ -388,15 +419,6 @@
       if(b.t>=b.life) bullets.splice(i,1);
     }
 
-    // particles
-    for(let i=particles.length-1;i>=0;i--){
-      const p=particles[i];
-      p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt;
-      p.vx *= Math.pow(0.88, dt*60);
-      p.vy *= Math.pow(0.88, dt*60);
-      if(p.t>=p.life) particles.splice(i,1);
-    }
-
     // powerups
     for(let i=powerups.length-1;i>=0;i--){
       const p=powerups[i];
@@ -412,12 +434,9 @@
       if(p.t>12) powerups.splice(i,1);
     }
 
-    // mode updates
     if(state.mode==="wave"){
-      // rocks
       for(const r of rocks){ r.a += r.av*dt; r.x += r.vx*dt; r.y += r.vy*dt; wrap(r); }
 
-      // spawns (more enemies + comets)
       const threat = Math.min(1.0, 0.25 + state.level*0.06);
       const saucerRate = clamp(0.004 + state.level*0.0014, 0.004, 0.014);
       const droneRate  = clamp(0.0025 + state.level*0.0011, 0.0025, 0.010);
@@ -429,7 +448,6 @@
       if(Math.random() < mineRate*dt   && enemies.filter(e=>e.kind==="mine").length  < Math.floor(1+threat)) enemies.push(spawnMine());
       if(Math.random() < cometRate*dt  && rocks.filter(r=>r.comet).length < Math.floor(1+threat)) rocks.push(spawnComet());
 
-      // enemies update
       for(let i=enemies.length-1;i>=0;i--){
         const e=enemies[i];
         e.t += dt;
@@ -469,101 +487,98 @@
         }
       }
 
-      // wave clear
       if(rocks.length===0 && enemies.length===0){
         state.level += 1;
+        resetShip();
         nextStage();
       }
-    } else {
-      // boss update
-      if(boss){
-        boss.t += dt;
-        boss.x += boss.vx*dt;
-        if(boss.x<120){ boss.x=120; boss.vx*=-1; }
-        if(boss.x>W-120){ boss.x=W-120; boss.vx*=-1; }
-        boss.y = 110 + Math.sin(boss.t*0.9)*22;
+    } else if(boss){
+      for(const r of rocks){ r.a += r.av*dt; r.x += r.vx*dt; r.y += r.vy*dt; wrap(r); }
 
-        boss.nextCore -= dt;
-        if(boss.nextCore<=0){ boss.coreOpen=1.35; boss.nextCore=boss.coreCycle; beep(740,0.05,"triangle",0.04); }
-        boss.coreOpen = Math.max(0, boss.coreOpen - dt);
+      boss.t += dt;
+      boss.x += boss.vx*dt;
+      if(boss.x<120){ boss.x=120; boss.vx*=-1; }
+      if(boss.x>W-120){ boss.x=W-120; boss.vx*=-1; }
+      boss.y = 110 + Math.sin(boss.t*0.9)*22;
 
-        boss.fireA -= dt;
-        if(boss.fireA<=0){
-          boss.fireA = clamp(0.50 - state.level*0.01, 0.26, 0.50);
-          enemyShoot(boss.x-34,boss.y+18,ship.x,ship.y,380,0.16);
-          enemyShoot(boss.x+34,boss.y+18,ship.x,ship.y,380,0.16);
+      boss.nextCore -= dt;
+      if(boss.nextCore<=0){ boss.coreOpen=1.35; boss.nextCore=boss.coreCycle; beep(740,0.05,"triangle",0.04); }
+      boss.coreOpen = Math.max(0, boss.coreOpen - dt);
+
+      boss.fireA -= dt;
+      if(boss.fireA<=0){
+        boss.fireA = clamp(0.50 - state.level*0.01, 0.26, 0.50);
+        enemyShoot(boss.x-34,boss.y+18,ship.x,ship.y,380,0.16);
+        enemyShoot(boss.x+34,boss.y+18,ship.x,ship.y,380,0.16);
+      }
+
+      const hpFrac = boss.hp / boss.maxHp;
+      boss.fireB -= dt;
+      if(boss.fireB<=0){
+        boss.fireB = clamp(1.35 - (1-hpFrac)*0.65, 0.65, 1.35);
+        const base = Math.atan2(ship.y-boss.y, ship.x-boss.x);
+        const spread = clamp(0.55 - hpFrac*0.25, 0.30, 0.55);
+        const shots = hpFrac < 0.45 ? 9 : 7;
+        for(let i=0;i<shots;i++){
+          const t=(i-(shots-1)/2)/((shots-1)/2);
+          const a=base + t*spread + Math.sin(boss.t*1.2)*0.12;
+          bullets.push({x:boss.x,y:boss.y+28,vx:Math.cos(a)*320,vy:Math.sin(a)*320,life:1.35,t:0,r:2,friendly:false,dmg:1});
         }
+        beep(240,0.06,"sawtooth",0.04);
+      }
 
-        const hpFrac = boss.hp / boss.maxHp;
-        boss.fireB -= dt;
-        if(boss.fireB<=0){
-          boss.fireB = clamp(1.35 - (1-hpFrac)*0.65, 0.65, 1.35);
-          const base = Math.atan2(ship.y-boss.y, ship.x-boss.x);
-          const spread = clamp(0.55 - hpFrac*0.25, 0.30, 0.55);
-          const shots = hpFrac < 0.45 ? 9 : 7;
-          for(let i=0;i<shots;i++){
-            const t=(i-(shots-1)/2)/((shots-1)/2);
-            const a=base + t*spread + Math.sin(boss.t*1.2)*0.12;
-            bullets.push({x:boss.x,y:boss.y+28,vx:Math.cos(a)*320,vy:Math.sin(a)*320,life:1.35,t:0,r:2,friendly:false,dmg:1});
-          }
-          beep(240,0.06,"sawtooth",0.04);
+      if(hpFrac<0.66 && enemies.length<2 && Math.random()<0.24*dt) enemies.push(spawnDrone());
+      if(hpFrac<0.40 && enemies.filter(e=>e.kind==="mine").length<1 && Math.random()<0.16*dt) enemies.push(spawnMine());
+
+      for(let i=enemies.length-1;i>=0;i--){
+        const e=enemies[i];
+        e.t += dt;
+        if(e.kind==="drone"){
+          const ax=ship.x-e.x, ay=ship.y-e.y;
+          const d=Math.hypot(ax,ay)||1;
+          const seek=130;
+          e.vx += (ax/d)*seek*dt; e.vy += (ay/d)*seek*dt;
+          e.dash -= dt;
+          if(e.dash<=0){ e.dash=rand(0.9,1.6); e.vx += (ax/d)*190; e.vy += (ay/d)*190; }
+          const sp2=Math.hypot(e.vx,e.vy);
+          const cap=240;
+          if(sp2>cap){ e.vx=e.vx/sp2*cap; e.vy=e.vy/sp2*cap; }
+          e.x += e.vx*dt; e.y += e.vy*dt; wrap(e);
+          if(d>220 && Math.random()<0.35*dt) enemyShoot(e.x,e.y,ship.x,ship.y,310,0.18);
         }
-
-        // adds
-        if(hpFrac<0.66 && enemies.length<2 && Math.random()<0.24*dt) enemies.push(spawnDrone());
-        if(hpFrac<0.40 && enemies.filter(e=>e.kind==="mine").length<1 && Math.random()<0.16*dt) enemies.push(spawnMine());
-
-        // update adds in boss mode
-        for(let i=enemies.length-1;i>=0;i--){
-          const e=enemies[i];
-          e.t += dt;
-          if(e.kind==="drone"){
-            const ax=ship.x-e.x, ay=ship.y-e.y;
-            const d=Math.hypot(ax,ay)||1;
-            const seek=130;
-            e.vx += (ax/d)*seek*dt; e.vy += (ay/d)*seek*dt;
-            e.dash -= dt;
-            if(e.dash<=0){ e.dash=rand(0.9,1.6); e.vx += (ax/d)*190; e.vy += (ay/d)*190; }
-            const sp2=Math.hypot(e.vx,e.vy);
-            const cap=240;
-            if(sp2>cap){ e.vx=e.vx/sp2*cap; e.vy=e.vy/sp2*cap; }
-            e.x += e.vx*dt; e.y += e.vy*dt; wrap(e);
-            if(d>220 && Math.random()<0.35*dt) enemyShoot(e.x,e.y,ship.x,ship.y,310,0.18);
-          }
-          if(e.kind==="mine"){
-            e.arm = Math.max(0, e.arm - dt);
-            e.x += e.vx*dt; e.y += e.vy*dt;
-            e.vx *= Math.pow(0.985, dt*60); e.vy *= Math.pow(0.985, dt*60);
-            wrap(e);
-            if(e.arm<=0 && dist2(e.x,e.y,ship.x,ship.y) < (e.r+70)**2){
-              explodeMine(e);
-              enemies.splice(i,1);
-              continue;
-            }
+        if(e.kind==="mine"){
+          e.arm = Math.max(0, e.arm - dt);
+          e.x += e.vx*dt; e.y += e.vy*dt;
+          e.vx *= Math.pow(0.985, dt*60); e.vy *= Math.pow(0.985, dt*60);
+          wrap(e);
+          if(e.arm<=0 && dist2(e.x,e.y,ship.x,ship.y) < (e.r+70)**2){
+            explodeMine(e);
+            enemies.splice(i,1);
+            continue;
           }
         }
+      }
 
-        if(boss.hp<=0){
-          state.score += 1200 + state.level*80;
-          burst(boss.x,boss.y,"rgba(255,77,109,.95)",40,240);
-          state.shake=0.40;
-          if(Math.random()<0.6) dropPowerup(boss.x,boss.y);
-          boss=null;
-          state.level += 1;
-          nextStage();
-        }
+      if(boss.hp<=0){
+        state.score += 1200 + state.level*80;
+        burst(boss.x,boss.y,"rgba(255,77,109,.95)",40,240);
+        state.shake=0.40;
+        if(Math.random()<0.6) dropPowerup(boss.x,boss.y);
+        boss=null;
+        state.level += 1;
+        resetShip();
+        nextStage();
       }
     }
 
-    // collisions: ship vs hazards
+    // collisions
     for(const r of rocks){
       if(dist2(ship.x,ship.y,r.x,r.y) < (ship.r + r.r*0.9)**2){ hitShip(); break; }
     }
     for(const e of enemies){
       if(dist2(ship.x,ship.y,e.x,e.y) < (ship.r + e.r + 6)**2){
         if(e.kind==="mine" && e.arm<=0.3) explodeMine(e);
-        hitShip();
-        break;
+        hitShip(); break;
       }
     }
     if(boss && dist2(ship.x,ship.y,boss.x,boss.y) < (ship.r + boss.r + 18)**2) hitShip();
@@ -579,7 +594,7 @@
       }
     }
 
-    // friendly bullets hit things
+    // friendly bullets hit
     for(let i=bullets.length-1;i>=0;i--){
       const b=bullets[i];
       if(!b.friendly) continue;
@@ -635,20 +650,6 @@
       }
     }
 
-    // enemy bullets can break rocks (optional chaos)
-    for(let i=bullets.length-1;i>=0;i--){
-      const b=bullets[i];
-      if(b.friendly) continue;
-      for(let j=rocks.length-1;j>=0;j--){
-        const r=rocks[j];
-        if(dist2(b.x,b.y,r.x,r.y) < (r.r)**2){
-          bullets.splice(i,1);
-          breakRock(j,true);
-          break;
-        }
-      }
-    }
-
     if(state.score > state.hi){
       state.hi = state.score;
       localStorage.setItem("blastroids_hi", String(state.hi));
@@ -657,10 +658,9 @@
 
   // ===== Draw
   function draw(){
-    // true vector look: black clear, crisp strokes
     ctx.clearRect(0,0,W,H);
 
-    // mild shake (without blur)
+    // mild shake
     const shake = state.shake;
     const sx = shake ? rand(-12,12)*shake : 0;
     const sy = shake ? rand(-12,12)*shake : 0;
@@ -675,11 +675,50 @@
     }
     ctx.globalAlpha = 1;
 
-    // subtle grid (optional, crisp)
+    // subtle grid (crisp)
     ctx.strokeStyle = "rgba(185,247,255,.04)";
     ctx.lineWidth = 1;
     for(let x=0;x<=W;x+=70){ ctx.beginPath(); ctx.moveTo(x+0.5,0); ctx.lineTo(x+0.5,H); ctx.stroke(); }
     for(let y=0;y<=H;y+=70){ ctx.beginPath(); ctx.moveTo(0,y+0.5); ctx.lineTo(W,y+0.5); ctx.stroke(); }
+
+    // particles
+    for(const p of particles){
+      const a = 1 - (p.t/p.life);
+      ctx.globalAlpha = clamp(a,0,1);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x|0, p.y|0, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+
+    // If splash: overlay UI and return (keeps stars moving)
+    if(showSplash){
+      ctx.save();
+      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillRect(0,0,W,H);
+
+      ctx.textAlign="center";
+      ctx.textBaseline="middle";
+
+      ctx.fillStyle="rgba(185,247,255,.98)";
+      ctx.font="64px ui-monospace, monospace";
+      ctx.fillText("BLASTROIDS", W/2, H*0.40);
+
+      ctx.fillStyle="rgba(185,247,255,.75)";
+      ctx.font="18px ui-monospace, monospace";
+      ctx.fillText("PRESS SPACE TO START", W/2, H*0.52);
+
+      ctx.fillStyle="rgba(185,247,255,.65)";
+      ctx.font="14px ui-monospace, monospace";
+      ctx.fillText("←/→ rotate   ↑ thrust   Space shoot   Shift hyperspace   P pause   M mute", W/2, H*0.60);
+
+      ctx.fillStyle="rgba(255,209,102,.75)";
+      ctx.font="14px ui-monospace, monospace";
+      ctx.fillText("Boss round every 5 levels", W/2, H*0.66);
+
+      ctx.restore();
+      ctx.restore();
+      return;
+    }
 
     // rocks
     for(const r of rocks){
@@ -696,7 +735,7 @@
       ctx.restore();
     }
 
-    // enemies (crisp outlines)
+    // enemies
     for(const e of enemies){
       if(e.kind==="saucer"){
         vstroke("rgba(255,209,102,.95)",2,()=>{
@@ -720,8 +759,7 @@
         });
       }
       if(e.kind==="mine"){
-        const armed = e.arm<=0;
-        const col = armed ? "rgba(255,209,102,.98)" : "rgba(185,247,255,.9)";
+        const col = (e.arm<=0) ? "rgba(255,209,102,.98)" : "rgba(185,247,255,.9)";
         vstroke(col,2,()=>{ ctx.arc(e.x,e.y,16,0,TAU); });
       }
     }
@@ -731,11 +769,9 @@
       vstroke("rgba(185,247,255,.95)",2,()=>{ ctx.roundRect(boss.x-86,boss.y-34,172,78,20); });
       vstroke("rgba(255,209,102,.95)",2,()=>{ ctx.roundRect(boss.x-62,boss.y+10,24,18,6); });
       vstroke("rgba(255,209,102,.95)",2,()=>{ ctx.roundRect(boss.x+38,boss.y+10,24,18,6); });
-
       const open = bossCoreOpen(boss);
       vstroke(open ? "rgba(127,255,212,.98)" : "rgba(127,255,212,.45)", 2, ()=>{ ctx.arc(boss.x, boss.y+10, 18, 0, TAU); });
 
-      // boss hp
       const barW=260, bx=W/2-barW/2, by=34;
       ctx.fillStyle="rgba(185,247,255,.10)";
       ctx.fillRect(bx,by,barW,10);
@@ -748,9 +784,7 @@
     // bullets
     for(const b of bullets){
       ctx.fillStyle = b.friendly ? "rgba(185,247,255,.95)" : "rgba(255,77,109,.95)";
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, TAU);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fill();
     }
 
     // powerups
@@ -790,15 +824,6 @@
       }
     }
 
-    // particles (pixel dots)
-    for(const p of particles){
-      const a = 1 - (p.t/p.life);
-      ctx.globalAlpha = clamp(a,0,1);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x|0, p.y|0, 2, 2);
-    }
-    ctx.globalAlpha = 1;
-
     // HUD
     ctx.fillStyle="rgba(185,247,255,.85)";
     ctx.font="16px ui-monospace, monospace";
@@ -817,7 +842,6 @@
       ctx.fillText(`SHIELD ${Math.ceil(ship.invuln)}s`, W-18, 50);
     }
 
-    // banner
     if(state.bannerT>0){
       ctx.globalAlpha = clamp(state.bannerT/1.6,0,1);
       ctx.fillStyle="rgba(0,0,0,.35)";
@@ -832,7 +856,7 @@
 
     ctx.restore();
 
-    // decay shake
+    // decay shake (fixed step)
     state.shake = Math.max(0, state.shake - 0.9*(1/60));
   }
 
@@ -846,8 +870,11 @@
     requestAnimationFrame(loop);
   }
 
-  // ==== START IMMEDIATELY
-  nextStage();
+  // ===== Start on splash
+  resetShip();
+  bullets=[]; rocks=[]; enemies=[]; powerups=[]; particles=[]; boss=null;
+  showSplash = true;
+  state.mode="splash";
   requestAnimationFrame(loop);
 
 })();
