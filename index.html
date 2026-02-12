@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Blastroids — Sharp Arcade Edition</title>
+  <title>BLASTEROIDS — Sharp Arcade Edition</title>
   <style>
     :root { --bg:#05070c; --fg:#b9f7ff; }
     html,body{
@@ -32,7 +32,7 @@
 </head>
 <body>
 <div id="wrap"><canvas id="c" width="980" height="720"></canvas></div>
-<div id="hint">Blastroids — ←/→ rotate • ↑ thrust • Space shoot • Shift hyperspace • P pause • M mute</div>
+<div id="hint">BLASTEROIDS — ←/→ rotate • ↑ thrust • Space shoot • Shift hyperspace • P pause • M mute</div>
 
 <script>
 (() => {
@@ -112,7 +112,7 @@
   const state = {
     paused:false,
     score:0,
-    hi:Number(localStorage.getItem("blastroids_hi")||0),
+    hi:Number(localStorage.getItem("blasteroids_hi")||0),
     level:1,
     lives:3,
     shake:0,
@@ -316,7 +316,7 @@
 
     if(state.lives<=0){
       state.hi = Math.max(state.hi, state.score);
-      localStorage.setItem("blastroids_hi", String(state.hi));
+      localStorage.setItem("blasteroids_hi", String(state.hi));
       // back to splash on game over
       state.score=0; state.level=1; state.lives=3;
       bullets=[]; rocks=[]; enemies=[]; powerups=[]; particles=[]; boss=null;
@@ -361,7 +361,6 @@
     }
 
     if(showSplash){
-      // nothing else updates; just animate stars/particles
       return;
     }
 
@@ -652,7 +651,7 @@
 
     if(state.score > state.hi){
       state.hi = state.score;
-      localStorage.setItem("blastroids_hi", String(state.hi));
+      localStorage.setItem("blasteroids_hi", String(state.hi));
     }
   }
 
@@ -690,7 +689,7 @@
     }
     ctx.globalAlpha = 1;
 
-    // If splash: overlay UI and return (keeps stars moving)
+    // Splash
     if(showSplash){
       ctx.save();
       ctx.fillStyle="rgba(0,0,0,.55)";
@@ -701,7 +700,7 @@
 
       ctx.fillStyle="rgba(185,247,255,.98)";
       ctx.font="64px ui-monospace, monospace";
-      ctx.fillText("BLASTROIDS", W/2, H*0.40);
+      ctx.fillText("BLASTEROIDS", W/2, H*0.40);
 
       ctx.fillStyle="rgba(185,247,255,.75)";
       ctx.font="18px ui-monospace, monospace";
