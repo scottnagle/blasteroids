@@ -360,9 +360,7 @@
       if(p.t>=p.life) particles.splice(i,1);
     }
 
-    if(showSplash){
-      return;
-    }
+    if(showSplash) return;
 
     state.bannerT = Math.max(0, state.bannerT - dt);
 
@@ -492,8 +490,6 @@
         nextStage();
       }
     } else if(boss){
-      for(const r of rocks){ r.a += r.av*dt; r.x += r.vx*dt; r.y += r.vy*dt; wrap(r); }
-
       boss.t += dt;
       boss.x += boss.vx*dt;
       if(boss.x<120){ boss.x=120; boss.vx*=-1; }
@@ -689,30 +685,55 @@
     }
     ctx.globalAlpha = 1;
 
-    // Splash
+    // Splash (with basic play instructions)
     if(showSplash){
       ctx.save();
-      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillStyle="rgba(0,0,0,.62)";
       ctx.fillRect(0,0,W,H);
 
       ctx.textAlign="center";
       ctx.textBaseline="middle";
 
       ctx.fillStyle="rgba(185,247,255,.98)";
-      ctx.font="64px ui-monospace, monospace";
-      ctx.fillText("BLASTEROIDS", W/2, H*0.40);
+      ctx.font="68px ui-monospace, monospace";
+      ctx.fillText("BLASTEROIDS", W/2, H*0.34);
 
-      ctx.fillStyle="rgba(185,247,255,.75)";
-      ctx.font="18px ui-monospace, monospace";
-      ctx.fillText("PRESS SPACE TO START", W/2, H*0.52);
+      ctx.fillStyle="rgba(185,247,255,.78)";
+      ctx.font="20px ui-monospace, monospace";
+      ctx.fillText("PRESS SPACE TO START", W/2, H*0.44);
 
+      // Controls
+      ctx.fillStyle="rgba(185,247,255,.72)";
+      ctx.font="15px ui-monospace, monospace";
+      ctx.fillText("CONTROLS", W/2, H*0.52);
+
+      ctx.font="14px ui-monospace, monospace";
       ctx.fillStyle="rgba(185,247,255,.65)";
-      ctx.font="14px ui-monospace, monospace";
-      ctx.fillText("←/→ rotate   ↑ thrust   Space shoot   Shift hyperspace   P pause   M mute", W/2, H*0.60);
+      const lines = [
+        "←/→  Rotate",
+        "↑     Thrust",
+        "Space Shoot",
+        "Shift Hyperspace",
+        "P     Pause   •   M Mute"
+      ];
+      let y = H*0.56;
+      for(const t of lines){ ctx.fillText(t, W/2, y); y += 18; }
 
-      ctx.fillStyle="rgba(255,209,102,.75)";
+      // How to play
+      ctx.fillStyle="rgba(255,209,102,.80)";
+      ctx.font="15px ui-monospace, monospace";
+      ctx.fillText("HOW TO PLAY", W/2, H*0.72);
+
+      ctx.fillStyle="rgba(255,209,102,.70)";
       ctx.font="14px ui-monospace, monospace";
-      ctx.fillText("Boss round every 5 levels", W/2, H*0.66);
+      const how = [
+        "Shoot asteroids to score — big rocks split into smaller ones.",
+        "Avoid enemy fire (saucers, drones, mines).",
+        "Collect powerups: R = Rapid Fire, S = Shield.",
+        "Boss round every 5 levels."
+      ];
+      y = H*0.76;
+      for(const t of how){ ctx.fillText(t, W/2, y); y += 18; }
 
       ctx.restore();
       ctx.restore();
